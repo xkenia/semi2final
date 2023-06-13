@@ -1,0 +1,463 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://getbootstrap.com/docs/5.2/assets/css/docs.css" rel="stylesheet">
+    <title>Semifinal to final split</title>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.4/jquery.min.js"></script>
+  </head>
+  <body class="p-3 m-0 border-0 bd-example">
+    <script lang="javascript">
+      // let xmlResult;
+
+      $( document ).ready(function() {
+        document.getElementById('file-input').addEventListener('change', readSingleFile, false);
+      });
+
+      // function loadFile() {
+      //   $( "#textResult" ).append( $("#inputGroupFile01").val() );
+      //   $( "#log").load( $("#inputGroupFile01").val() );
+      //   xmlResult.load( "http://localhost/semi2final/export_xml_6804.xml", function( response, status, xhr ) {
+      //     if ( status == "error" ) {
+      //         var msg = "Sorry but there was an error: ";
+      //         $( "#error" ).html( msg + xhr.status + " " + xhr.statusText );
+      //     }
+      //   });
+      // }
+
+      const classResults = new Map();
+      const classStarts = new Map();
+      const disq = new Map();
+      let resultsFileName = ''; //used for generate filename for import into QE
+      let showedDataType = '';
+      var xmlDoc;
+
+      function readSingleFile(e) {
+        var file = e.target.files[0];
+        resultsFileName = file.name;
+        let date = new Date();
+        document.getElementById("starttime").innerHTML = `Generated from ${resultsFileName} at ${('0' + date.getHours()).slice(-2)}:${('0' + date.getMinutes()).slice(-2)}:${('0' + date.getSeconds()).slice(-2)}.${date.getMilliseconds()}`;
+        if (!file) {
+          return;
+        }
+        var reader = new FileReader();
+        reader.onload = function(e) {
+          var contents = e.target.result;
+          parse(contents);
+        };
+        reader.readAsText(file);
+        e.target.value=""; //to be possible to fire onChange event with same file
+      }
+
+      function displayContents(contents) {
+        // var element = document.getElementById('file-content');
+        // element.textContent = contents;
+        // parse(contents);
+      }
+
+      /** 
+       * Classes 
+      */
+      function ClassResult(name, personResults, countsForFinal) {
+        this.name = name;
+        this.personResults = personResults;
+        this.addPersonResult = function(personResult) {
+          this.personResults = personResult;
+        }
+        this.countsForFinal = countsForFinal;
+        this.finalCategories = new Map();
+        // this.finalCategoriesCount = new Map();
+        this.finalIndex = 0;
+        this.getSubCategoriesResult = function(subCatName) {
+          let subCatResults = [];
+          this.personResults.forEach(element => {
+            if (element.finalCategory == subCatName) {
+              subCatResults.push(element);
+            }
+          });
+          return subCatResults;
+        }
+      }
+
+      function PersonResult(familyName, givenName, time, status, reg, si) {
+        this.givenName = givenName;
+        this.familyName = familyName;
+        this.fullName = familyName + " " + givenName;
+        this.time = time;
+        this.status = status;
+        this.reg = reg;
+        this.si = si;
+        this.finalCategory = "";
+        
+      }
+
+      function PersonStart(order, personResult) {
+        this.order = order;
+        this.personResult = personResult;
+      }
+
+      function ClassStart(name, count, semiCategories) {
+        this.name = name;
+        this.count = count;
+        this.countsForFinal = 0;
+        this.semiCategories = semiCategories;
+        this.personStarts = [];
+        this.toLog = function() {
+          console.log("class start: " + this.name);
+          let index = 0;
+          this.personStarts.forEach(element => {
+            console.log("    " + index++ + ". " + element.personResult.fullName);
+          });
+        }
+
+        this.toString = function(format) {
+          let content = "";
+          content += `class start: ${this.name} - count: ${this.countsForFinal}</br>`;
+          let index = 1;
+          this.personStarts.forEach(element => {
+            let result = element.personResult;
+            content += `    ${index++}. ${result.fullName}</br>`;
+          });
+          return content;
+        }
+
+        this.toStartTimesOB2000 = function() {
+          let content = "";
+          let index = 1;
+          this.personStarts.forEach(element => {
+            let result = element.personResult;
+            let starttime = String("         " + index++).slice(-9);
+            let fullname = String(result.fullName + "                     ").slice(0, 20);
+            let sinumber = String("                 " + result.si).slice(-18);
+            let reg = String("          " + result.reg.substring(0,3) + "  " + result.reg.substring(3,7)).slice(-10);
+            let cat = String("     " + this.name).slice(-5);
+            content += `${starttime}${sinumber} ${fullname}${cat}${reg}\r\n`;
+          });
+          content += "";
+          return content;
+        }
+
+        this.toRunnersQECSV = function() {
+          let content = "";
+          // reg;kat;si;prij;jm;lic;pozn
+          this.personStarts.forEach(element => {
+            let result = element.personResult;
+            let lic = 'C';
+            let note = '';
+            content += `${result.reg},${this.name},${result.si},${result.familyName},${result.givenName},${lic},${note}\r\n`;
+          });
+          return content;
+        }
+
+      } //end of ClassStart class
+
+      /**
+       * end of Classes
+      */
+
+      function parse(content) {
+        //Create a parser
+        var parser = new DOMParser();
+        xmlDoc = parser.parseFromString(content,"text/xml");
+        let classResultsNode = xmlDoc.getElementsByTagName("ClassResult");
+        for (i = 0; i < classResultsNode.length; i++) {
+          let className = classResultsNode[i].getElementsByTagName("Class")[0].getElementsByTagName("Name")[0].textContent;
+          let personResultsNode = classResultsNode[i].getElementsByTagName("PersonResult");
+          let personResults = [];
+          for (j = 0; j < personResultsNode.length; j++) {
+              let familyName = personResultsNode[j].getElementsByTagName("Person")[0].getElementsByTagName("Name")[0].getElementsByTagName("Family")[0].textContent;
+              let givenName = personResultsNode[j].getElementsByTagName("Person")[0].getElementsByTagName("Name")[0].getElementsByTagName("Given")[0].textContent;
+              // console.debug(personName);
+              let timeNode = personResultsNode[j].getElementsByTagName("Result")[0].getElementsByTagName("Time");
+              let time = timeNode.length > 0 ? timeNode[0].textContent : null;
+              let status = personResultsNode[j].getElementsByTagName("Result")[0].getElementsByTagName("Status")[0].textContent;
+              // console.debug(personResultsNode[j].getElementsByTagName("Person")[0].getElementsByTagName("Id"));
+              let regNode = personResultsNode[j].getElementsByTagName("Person")[0].getElementsByTagName("Id");
+              let reg = regNode.length > 0 ? regNode[0].textContent : "";
+              for (let k = 0; k < regNode.length && regNode[k].attributes.length != 0; k++) {
+                if (regNode[k].attributes["type"].value == "CZE") {
+                  reg = regNode[k].textContent;
+                  break;
+                }
+              }
+              let siNode = personResultsNode[j].getElementsByTagName("Result")[0].getElementsByTagName("ControlCard");
+              let si = siNode > 0 ? siNode[0].textContent : "0";
+              const person = new PersonResult(familyName, givenName, time, status, reg, si);
+              // console.debug(person);
+
+              if (person.status == 'DNS' && document.getElementById('removeDNS').checked == true) {
+                console.warn(`Runner ${person.fullName} [${person.reg}] removed from final list - DNS`);
+              } else {
+                personResults.push(person);
+              }
+              // personResults.push(person);
+          }
+
+          classResults.set(className, new ClassResult(className, personResults, 0));
+        }
+
+        parseConfiguration();
+
+        /**
+         * Fill final catgory suffix into semifinal results
+         */
+        classResults.forEach(category => {
+          splitToFinalCategories(category);
+        });
+
+        /**
+         * Take reversed semifinal categories (CSOS rule) and from first to last runner in this categories copy them to final category
+         */
+         classStarts.forEach(finalCategory => {
+          const reversedSemiCatogories = finalCategory.semiCategories.toReversed();
+          let subCategoriesResults = [];
+          reversedSemiCatogories.forEach(semiCatName => {
+            try {
+              subCategoriesResults.push(classResults.get(semiCatName).getSubCategoriesResult(finalCategory.name));
+            } catch (error) {
+              console.warn(`Not possible to find semifinal category ${semiCatName} for final category ${finalCategory.name} when prepare subcategories for fill into final categories`);
+            }
+          });
+          // console.log(subCategoriesResults);
+          fillInOrderFinalCategories(finalCategory, subCategoriesResults);
+        });
+
+        console.log("Class Starts entries::");
+        console.log([...classStarts.entries()]);
+        console.log("Class Results entries::");
+        console.log([...classResults.entries()]);
+
+        // showStartList('file-content');
+        showFinalCategoriesSummary('file-content');
+
+        //enable show buttons
+        let elementsBtnShow = document.getElementsByClassName('btnShow');
+        for (let index = 0; index < elementsBtnShow.length; index++) {
+          elementsBtnShow[index].disabled = false;
+        }
+
+      } // end of Parse() function - main function
+
+      function parseConfiguration() {
+        let configurationTextArea = document.getElementById("configurationTextArea").value;
+        let rows = configurationTextArea.match(/[^\r\n]+/g);
+        for (let i = 0; i < rows.length; i++) {
+          let rowParts = rows[i].split(";");
+          console.log("json parts of row " + i + ": " + JSON.stringify(rowParts));
+          let newCategory = rowParts[0];
+          let semiCategories = rowParts[1].split(",");
+          for (let y = 2; y < rowParts.length; y++) {
+            let newCategoryWithSuffix = addSuffixToFinalCategory(newCategory, y - 2);
+            const classStart = new ClassStart(newCategoryWithSuffix, rowParts[y], semiCategories, []);
+            classStarts.set(newCategoryWithSuffix, classStart);
+            semiCategories.forEach(catName => {
+              try {
+                classResults.get(catName).finalCategories.set(newCategoryWithSuffix, rowParts[y] / (semiCategories.length) ); //TODO check for division
+              // classResults.get(catName).finalCategoriesCount.push(rowParts[y] / (rowParts.length - 2));
+              } catch (error) {
+                console.error(`Not possible to find semifinal category ${catName} from configuration`);
+              }
+            });
+          }
+        }
+      }
+
+      function addSuffixToFinalCategory(categoryName, suffixOrder) {
+        return categoryName + String.fromCharCode(65 + suffixOrder); // 65 = A
+      }
+
+      function getNextUpperCategory(categoryName) {
+        let catName = categoryName.substring(0, categoryName.length - 1);
+        let suffixOrder = categoryName.substring(categoryName.length - 1).charCodeAt(0) - 65; // 65 = A
+        return addSuffixToFinalCategory(catName, ++suffixOrder);
+      }
+
+      function splitToFinalCategories(resultCategory) {
+        console.log(`Split semifinal results for category :: ${resultCategory.name} with count ${resultCategory.personResults.length}`);
+        // console.log(resultCategory);
+        var index = 0;
+        resultCategory.finalCategories.forEach((finalCategoryCount, finalCategoryName, map) => {
+          finalClass = classStarts.get(finalCategoryName);
+
+          console.log(`Split into final category ${finalCategoryName} - runners count: ${finalCategoryCount}`);
+          // console.log(finalClass);
+          
+          for (i = 0; i < finalCategoryCount && index < resultCategory.personResults.length; i++, index++) {
+            // resultCategory.personResults[index].status == 'OK' ? resultCategory.personResults[index].finalCategory = finalCategoryName : resultCategory.personResults[index].finalCategory = 'X'; //TODO dodelat vyhozeni disku
+            resultCategory.personResults[index].finalCategory = finalCategoryName;
+            classStarts.get(finalCategoryName).countsForFinal++;
+          }
+          while (index < resultCategory.personResults.length && resultCategory.personResults[index-1].time == resultCategory.personResults[index].time) {
+            // resultCategory.personResults[index].status == 'OK' ? resultCategory.personResults[index].finalCategory = finalCategoryName : resultCategory.personResults[index].finalCategory = 'X';
+            console.warn(`Runner ${resultCategory.personResults[index].fullName} [${resultCategory.personResults[index].reg}] moved to upper category`);
+            resultCategory.personResults[index].finalCategory = finalCategoryName;
+            addAndRemoveCountsForCategories(resultCategory, finalCategoryName);
+            index++;
+          }
+        });
+      }
+      
+      function addAndRemoveCountsForCategories(resultCategory, finalCategoryName) {
+        resultCategory.finalCategories.set(finalCategoryName, resultCategory.finalCategories.get(finalCategoryName) + 1);
+        let upperCategoryName = getNextUpperCategory(finalCategoryName);
+        resultCategory.finalCategories.set(upperCategoryName, resultCategory.finalCategories.get(upperCategoryName) - 1);
+      }
+
+      function fillInOrderFinalCategories(finalCategory, subCategoriesResults) {
+        // console.log(`Fill final category ${finalCategory.name} with semi results in order last from A->B->C`);
+
+        let index = 0;
+        let order = 0;
+        let allFilled = false;
+        let countSubCategories = subCategoriesResults.length;
+
+        while (allFilled == false) {
+          allFilled = true;
+          for (let i = 0; i < subCategoriesResults.length; i++) {
+            if (index < subCategoriesResults[i].length) {
+              let personStart = new PersonStart(order++, subCategoriesResults[i][index]);
+              finalCategory.personStarts.push(personStart);
+              allFilled = false;
+            }
+          }
+          index++;
+        }
+
+        console.log(`Filled final category ${finalCategory.name} with ${finalCategory.personStarts.length} runners`)
+
+        finalCategory.personStarts.reverse();
+      }
+
+      function showStartList(elementId) {
+        document.getElementById(elementId).innerHTML = "";
+        for (const [name, cat] of classStarts) {
+          document.getElementById(elementId).innerHTML += cat.toRunnersQECSV();
+        }
+      }
+
+      function showQECSV(elementId) {
+        document.getElementById(elementId).innerHTML = "";
+        for (const [name, cat] of classStarts) {
+          document.getElementById(elementId).innerHTML += cat.toRunnersQECSV();
+        }
+        document.getElementById('btnDownload').disabled = false;
+        showedDataType = 'runnerCSV';
+      }
+
+      function showOB2000Start(elementId) {
+        document.getElementById(elementId).innerHTML = "";
+        for (const [name, cat] of classStarts) {
+          document.getElementById(elementId).innerHTML += cat.toStartTimesOB2000();
+        }
+        document.getElementById('btnDownload').disabled = false;
+        showedDataType = 'OB2000start';
+      }
+
+      function showFinalCategoriesSummary(elementId) {
+        let el = document.getElementById(elementId);
+        el.innerHTML = "";
+        let total = 0;
+        for (const [name, cat] of classStarts) {
+          el.innerHTML += `${name} : ${cat.personStarts.length}\r\n`;
+          total += cat.personStarts.length;
+        }
+        el.innerHTML += `Total : ${total}`; 
+      }
+
+      function saveDataToFile(fileName) {
+        // Get the data from each element on the form.
+        const data = document.getElementById('file-content').textContent;        
+        // Convert the text to BLOB.
+        const textToBLOB = new Blob([data], { type: 'text/plain' });
+        const sFileName = fileName; // The file to save the data.
+
+        let newLink = document.createElement("a");
+        newLink.download = sFileName;
+
+        if (window.webkitURL != null) {
+            newLink.href = window.webkitURL.createObjectURL(textToBLOB);
+        }
+        else {
+            newLink.href = window.URL.createObjectURL(textToBLOB);
+            newLink.style.display = "none";
+            document.body.appendChild(newLink);
+        }
+
+        newLink.click(); 
+      }
+
+    </script>
+
+    <h1>Prepare results from semifinal to final startlist</h1>
+
+    <!-- <div class="input-group mb-1">
+        <input type="file" class="form-control" id="inputGroupFile01">
+        <button class="btn btn-outline-secondary" type="button" id="inputGroupFileAddon01" onclick="loadFile()">Load file</button>
+    </div> -->
+
+    <div class="input-group" style="height: 250px">
+        <!-- <span class="input-group-text">Result</span> -->
+        <!-- <textarea class="form-control" aria-label="Result" id="textResult"></textarea> -->
+
+        <span class="input-group-text">Configuration</span>
+        <textarea class="form-control" aria-label="Configuration" id="configurationTextArea">D16;D16A,D16B,D16C;18;30;900
+D18;D18A,D18B,D18C;18;30;900
+D20;D20A,D20B;18;30;800
+D21;D21A,D21B,D21C,D21D;32;40;40;800
+H16;H16A,H16B,H16C;18;30;900
+H18;H18A,H18B,H18C;18;30;900
+H20;H20A,H20B;18;30;800
+H21;H21A,H21B,H21C,H21D;32;40;40;800</textarea>
+    </div>
+    <label aria-label="removeDNS">Remove DidNotStart</label>
+    <input type="checkbox" id="removeDNS" checked></input>
+    <div id="log"></div>
+    <div id="success"></div>
+    <div id="error"></div>
+
+    </br>
+    <h4>Test data</h4>
+    <a href="https://oris.orientacnisporty.cz/Startovka?id=6233">test startlist</a></br>
+    <a href="https://oris.orientacnisporty.cz/Vysledky?id=6232">test results - select IOF XML v3 format</a></br>
+    <a href="https://github.com/Quick-Event/quickbox/issues/806">QE issue with drawing in specified order #806</a></br>
+    <a href="https://github.com/Quick-Event/quickbox/issues/95">QE issue with import start times OB2000 #95</a></br>
+    </br>
+    <input type="file" id="file-input" />
+    </br>
+
+    <pre>
+  Usage:
+    1. fill configuration
+      [final category name];[semifinal categories split by ,];[runners count in final A category];[runners count in final B category] ...
+    2. select xml file with semifinal results in format IOF XML v3
+    3. save content "Show QE CSV import" as txt file and import into final race in QE - this will import runners in proper categories; import is in Soubor -> Importovat -> Textovy soubor -> Seznam zavodniku ve formatu csv
+    4. save content "Show OB2000 start times" as txt file and import into final race in QE - this will update start times as an order from 1; import is in Useky/Etapy -> Importovat -> Startovni casy -> OB2000
+    5. in QE update start times with real start times - first start in category, start interval
+    6. check with advisor if start list is correct
+
+  Exceptions:
+    - do not use Firefox (not implemented some functions)
+    - open dev console for more info in case of problem
+
+  Not function:
+    - disqualifications, mispunched, not started
+    </pre>
+
+    <h3>Start list: </h3><pre id="starttime"></pre>
+
+    <button class="btnShow" id="finalSummary" onclick="showFinalCategoriesSummary('file-content')" disabled>Show summary</button>
+    <button class="btnShow" id="qecsv" onclick="showQECSV('file-content')" disabled>Show QE CSV import</button>
+    <button class="btnShow" id="ob2000start" onclick="showOB2000Start('file-content')" disabled>Show OB2000 start times</button>
+    <button class="btnDownload" id="btnDownload" onclick="saveDataToFile(resultsFileName + '-' + showedDataType + '.txt')" disabled>Download showed data</button>
+
+
+    <pre id="file-content"></pre>
+    <!-- <div id="Classes">Classes: </div>
+    <div id="FirstName">First Name: </div>
+    <div id="Description">Description: </div> -->
+    
+  </body>
+</html>
