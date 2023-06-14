@@ -91,9 +91,10 @@
         this.personResult = personResult;
       }
 
-      function ClassStart(name, count, semiCategories) {
+      function ClassStart(name, configCount, semiCategories) {
         this.name = name;
         this.semiCategories = semiCategories;
+        this.configCount = configCount;
         this.personStarts = [];
 
         this.toLog = function() {
@@ -192,7 +193,9 @@
           }
 
           classResults.set(className, new ClassResult(className, personResults, 0));
-        }
+        } // end of parse results xml
+
+        const originalResultsClass = classResults;
 
         parseConfiguration();
 
@@ -206,7 +209,7 @@
         /**
          * Take reversed semifinal categories (CSOS rule) and from first to last runner in this categories copy them to final category and then reverse to start from worst to best
          */
-         classStarts.forEach(finalCategory => {
+        classStarts.forEach(finalCategory => {
           const reversedSemiCatogories = finalCategory.semiCategories.toReversed();
           let subCategoriesResults = [];
           reversedSemiCatogories.forEach(semiCatName => {
@@ -388,7 +391,6 @@
             newLink.style.display = "none";
             document.body.appendChild(newLink);
         }
-
         newLink.click(); 
       }
 
@@ -421,16 +423,7 @@
     <a href="https://github.com/Quick-Event/quickbox/issues/95">QE issue with import start times OB2000 #95</a></br>
     <hr></br>
 
-
-    <!-- <div class="input-group mb-1">
-        <input type="file" class="form-control" id="inputGroupFile01">
-        <button class="btn btn-outline-secondary" type="button" id="inputGroupFileAddon01" onclick="loadFile()">Load file</button>
-    </div> -->
-
     <div class="input-group" style="height: 250px">
-        <!-- <span class="input-group-text">Result</span> -->
-        <!-- <textarea class="form-control" aria-label="Result" id="textResult"></textarea> -->
-
         <span class="input-group-text">Configuration</span>
         <textarea class="form-control" aria-label="Configuration" id="configurationTextArea">D16;D16A,D16B,D16C;18;30;900
 D18;D18A,D18B,D18C;18;30;900
@@ -441,6 +434,7 @@ H18;H18A,H18B,H18C;18;30;900
 H20;H20A,H20B;18;30;800
 H21;H21A,H21B,H21C,H21D;32;40;40;800</textarea>
     </div>
+
     <label aria-label="removeDNS">Remove DidNotStart</label>
     <input type="checkbox" id="removeDNS" checked></input>
     </br>
@@ -449,18 +443,15 @@ H21;H21A,H21B,H21C,H21D;32;40;40;800</textarea>
     </br>
     </br>
 
-    <h3>Start list: </h3><pre id="starttime"></pre>
+    <h3>Start list: </h3>
+    <pre id="starttime"></pre>
 
     <button class="btnShow" id="finalSummary" onclick="showFinalCategoriesSummary('file-content')" disabled>Show summary</button>
     <button class="btnShow" id="qecsv" onclick="showQECSV('file-content')" disabled>Show QE CSV import</button>
     <button class="btnShow" id="ob2000start" onclick="showOB2000Start('file-content')" disabled>Show OB2000 start times</button>
     <button class="btnDownload" id="btnDownload" onclick="saveDataToFile(resultsFileName + '-' + showedDataType + '.txt')" disabled>Download showed data</button>
 
-
     <pre id="file-content"></pre>
-    <!-- <div id="Classes">Classes: </div>
-    <div id="FirstName">First Name: </div>
-    <div id="Description">Description: </div> -->
     
   </body>
 </html>
