@@ -11,47 +11,15 @@
   </head>
   <body class="p-3 m-0 border-0 bd-example">
     <script lang="javascript">
-
-      $( document ).ready(function() {
-        document.getElementById('file-input').addEventListener('change', readSingleFile, false);
-      });
       
       const classResults = new Map();
       const classStarts = new Map();
-      var disq;
+      const disq = new Map();
+      var disqCount = 0;
       var resultsFileName; //used for generate filename for import into QE
       var showedDataType;
       var dns;
-
-      function init() {
-        classResults.clear;
-        classStarts.clear
-        disq = [];
-        resultsFileName = ''; //used for generate filename for import into QE
-        showedDataType = '';
-        dns = 0;
-      }
-
-      function readSingleFile(e) {
-        //init global data
-        init();
-
-        var file = e.target.files[0];
-        resultsFileName = file.name;
-        let date = new Date();
-        document.getElementById("starttime").innerHTML = `Generated from ${resultsFileName} at ${('0' + date.getHours()).slice(-2)}:${('0' + date.getMinutes()).slice(-2)}:${('0' + date.getSeconds()).slice(-2)}.${date.getMilliseconds()}`;
-        if (!file) {
-          return;
-        }
-        var reader = new FileReader();
-        reader.onload = function(e) {
-          var contents = e.target.result;
-          parse(contents); //start here
-        };
-        reader.readAsText(file);
-        e.target.value=""; //to be possible to fire onChange event with same file
-      }
-
+      
       /** 
        * Classes 
       */
@@ -91,10 +59,10 @@
         this.personResult = personResult;
       }
 
-      function ClassStart(name, configCount, semiCategories) {
+      function ClassStart(name, countFromConfiguration, semiCategories) {
         this.name = name;
         this.semiCategories = semiCategories;
-        this.configCount = configCount;
+        this.countFromConfiguration = countFromConfiguration;
         this.personStarts = [];
 
         this.toLog = function() {
@@ -118,10 +86,10 @@
 
         this.toStartTimesOB2000 = function() {
           let content = "";
-          let index = 1;
+          let index = this.personStarts.length;
           this.personStarts.forEach(element => {
             let result = element.personResult;
-            let starttime = String("         " + index++).slice(-9);
+            let starttime = String("         " + index--).slice(-9);
             let fullname = String(result.fullName + "                     ").slice(0, 20);
             let sinumber = String("                 " + result.si).slice(-18);
             let reg = String("          " + result.reg.substring(0,3) + "  " + result.reg.substring(3,7)).slice(-10);
@@ -150,6 +118,41 @@
        * end of Classes
       */
 
+
+      $( document ).ready(function() {
+        document.getElementById('file-input').addEventListener('change', readSingleFile, false);
+      });
+
+      function readSingleFile(e) {
+        //init global data
+        init();
+
+        var file = e.target.files[0];
+        resultsFileName = file.name;
+        let date = new Date();
+        document.getElementById("starttime").innerHTML = `Generated from ${resultsFileName} at ${('0' + date.getHours()).slice(-2)}:${('0' + date.getMinutes()).slice(-2)}:${('0' + date.getSeconds()).slice(-2)}.${date.getMilliseconds()}`;
+        if (!file) {
+          return;
+        }
+        var reader = new FileReader();
+        reader.onload = function(e) {
+          var contents = e.target.result;
+          parse(contents); 
+          main(); //start here
+        };
+        reader.readAsText(file);
+        e.target.value=""; //to be possible to fire onChange event with same file
+      }
+
+      function init() {
+        classResults.clear;
+        classStarts.clear
+        disq.clear;
+        resultsFileName = ''; //used for generate filename for import into QE
+        showedDataType = '';
+        dns = 0;
+      }
+
       function parse(content) {
         //Create a parser
         var parser = new DOMParser();
@@ -159,6 +162,7 @@
           let className = classResultsNode[i].getElementsByTagName("Class")[0].getElementsByTagName("Name")[0].textContent;
           let personResultsNode = classResultsNode[i].getElementsByTagName("PersonResult");
           let personResults = [];
+          let disqArr = [];
           for (j = 0; j < personResultsNode.length; j++) {
               let familyName = personResultsNode[j].getElementsByTagName("Person")[0].getElementsByTagName("Name")[0].getElementsByTagName("Family")[0].textContent;
               let givenName = personResultsNode[j].getElementsByTagName("Person")[0].getElementsByTagName("Name")[0].getElementsByTagName("Given")[0].textContent;
@@ -186,49 +190,36 @@
                 dns++;
               } else if (person.status != 'OK') {
                 console.log(`Runner ${className} ${person.fullName} [${person.reg}] is not OK - moved to DISQ`);
-                disq.push(person);
+                disqArr.push(person);
+                disqCount++;
               } else {
                 personResults.push(person);
               }
           }
-
+          if (disqArr.length != 0) {
+            disq.set(removeSuffixFromFinalCategory(className), disqArr);
+          }
           classResults.set(className, new ClassResult(className, personResults, 0));
-        } // end of parse results xml
+        } 
+      } // end of parse results xml
 
-        const originalResultsClass = classResults;
-
-        parseConfiguration();
-
-        /**
-         * Fill final category suffix into semifinal results
-         */
-        classResults.forEach(category => {
-          splitToFinalCategories(category);
-        });
-
-        /**
-         * Take reversed semifinal categories (CSOS rule) and from first to last runner in this categories copy them to final category and then reverse to start from worst to best
-         */
-        classStarts.forEach(finalCategory => {
-          const reversedSemiCatogories = finalCategory.semiCategories.toReversed();
-          let subCategoriesResults = [];
-          reversedSemiCatogories.forEach(semiCatName => {
-            try {
-              subCategoriesResults.push(classResults.get(semiCatName).getSubCategoriesResult(finalCategory.name));
-            } catch (error) {
-              console.warn(`Not possible to find semifinal category ${semiCatName} for final category ${finalCategory.name} when prepare subcategories for fill into final categories`);
-            }
-          });
-          // console.log(subCategoriesResults);
-          fillInOrderFinalCategories(finalCategory, subCategoriesResults);
-        });
-
-        splitDISQToFinalCategories();
+      function main() {
+        const originalResultsClass = classResults; //save original results
 
         console.log("Class Starts entries::");
         console.log([...classStarts.entries()]);
         console.log("Class Results entries::");
         console.log([...classResults.entries()]);
+
+        parseConfiguration();
+
+        classStarts.forEach(category => {
+          moveToFinalCategories(category);
+        });
+
+        checkFinalCategories();
+
+        splitDISQToFinalCategories();
 
         // showStartList('file-content');
         showFinalCategoriesSummary('file-content');
@@ -239,7 +230,33 @@
           elementsBtnShow[index].disabled = false;
         }
 
-      } // end of Parse() function - main function
+      } 
+      /**
+       * end of main() function - main function
+      */
+
+      function checkFinalCategories() {
+        classStarts.forEach((finalCategory, finalCategoryName, map) => {
+          let lowerCategory = existNonEmptyLowerFinalCategory(finalCategory.name);
+          if (finalCategory.personStarts.length != 0 && finalCategory.countFromConfiguration != finalCategory.personStarts.length && lowerCategory) {
+            console.error(`${finalCategoryName} is not fully filled : config = ${finalCategory.countFromConfiguration} || length = ${finalCategory.personStarts.length} || ${lowerCategory.name} with count ${lowerCategory.personStarts.length}`);
+            let placesToFill = finalCategory.countFromConfiguration - finalCategory.personStarts.length;
+            if (lowerCategory.personStarts.length < placesToFill) {
+              console.log(`It is possible to move runners from ${lowerCategory.name} to ${finalCategory.name}`);
+            } else {
+              console.error(`${lowerCategory.name} has more runners than empty places in ${finalCategory.name}`);
+            }
+          }
+        });
+      }
+
+      function existNonEmptyLowerFinalCategory(categoryName) {
+        let lowerCategoryName = getNextCategory(categoryName, 'down');
+        if (classStarts.has(lowerCategoryName) && classStarts.get(lowerCategoryName).personStarts.length > 0) {
+          return classStarts.get(lowerCategoryName);
+        }
+        return false;
+      }
 
       function parseConfiguration() {
         let configurationTextArea = document.getElementById("configurationTextArea").value;
@@ -249,6 +266,11 @@
           console.log("json parts of row " + i + ": " + JSON.stringify(rowParts));
           let newCategory = rowParts[0];
           let semiCategories = rowParts[1].split(",");
+          let semiCategoriesRunnersTotal = 0;
+          semiCategories.forEach(semiCatName => {
+            semiCategoriesRunnersTotal += classResults.get(semiCatName).personResults.length;
+          });
+          let finalCategoriesRunnersTotal = 0;
           for (let y = 2; y < rowParts.length; y++) {
             let newCategoryWithSuffix = addSuffixToFinalCategory(newCategory, y - 2);
             const classStart = new ClassStart(newCategoryWithSuffix, rowParts[y], semiCategories, []);
@@ -261,6 +283,7 @@
                 console.error(`Not possible to find semifinal category ${catName} from configuration`);
               }
             });
+            finalCategoriesRunnersTotal += rowParts[y];
           }
         }
       }
@@ -269,69 +292,68 @@
         return categoryName + String.fromCharCode(65 + suffixOrder); // 65 = A
       }
 
-      function getNextUpperCategory(categoryName) {
+      function removeSuffixFromFinalCategory(categoryName) {
+        return categoryName.substring(0, categoryName.length-1);
+      }
+
+      function getNextCategory(categoryName, upOrDown) {
+        let catName = categoryName.substring(0, categoryName.length - 1);
+        let suffixOrder = categoryName.substring(categoryName.length - 1).charCodeAt(0) - 65; // 65 = A
+        suffixOrder += upOrDown == 'up' ? -1 : 1;
+        return addSuffixToFinalCategory(catName, suffixOrder);
+      }
+
+      function getNextLowerCategory(categoryName) {
         let catName = categoryName.substring(0, categoryName.length - 1);
         let suffixOrder = categoryName.substring(categoryName.length - 1).charCodeAt(0) - 65; // 65 = A
         return addSuffixToFinalCategory(catName, ++suffixOrder);
       }
 
-      function splitToFinalCategories(resultCategory) {
-        console.log(`Split semifinal results for category :: ${resultCategory.name} with count ${resultCategory.personResults.length}`);
-        // console.log(resultCategory);
-        var index = 0;
-        resultCategory.finalCategories.forEach((finalCategoryCount, finalCategoryName, map) => {
-          finalClass = classStarts.get(finalCategoryName);
-
-          console.log(`Split into final category ${finalCategoryName} - runners count from configuration: ${finalCategoryCount}`);
-          // console.log(finalClass);
-          
-          for (i = 0; i < finalCategoryCount && index < resultCategory.personResults.length; i++, index++) {
-            resultCategory.personResults[index].finalCategory = finalCategoryName;
-            classStarts.get(finalCategoryName).countsForFinal++;
-          }
-          while (index < resultCategory.personResults.length && resultCategory.personResults[index-1].time == resultCategory.personResults[index].time) {
-            console.warn(`Runner ${resultCategory.personResults[index].fullName} [${resultCategory.personResults[index].reg}] moved to upper category, same time as ${resultCategory.personResults[index-1].fullName} [${resultCategory.personResults[index-1].reg}]`);
-            resultCategory.personResults[index].finalCategory = finalCategoryName;
-            addAndRemoveCountsForCategories(resultCategory, finalCategoryName);
-            index++;
-          }
-        });
-      }
-
-      function splitDISQToFinalCategories() {
-        // const 
-      }
-      
-      function addAndRemoveCountsForCategories(resultCategory, finalCategoryName) {
-        resultCategory.finalCategories.set(finalCategoryName, resultCategory.finalCategories.get(finalCategoryName) + 1);
-        let upperCategoryName = getNextUpperCategory(finalCategoryName);
-        resultCategory.finalCategories.set(upperCategoryName, resultCategory.finalCategories.get(upperCategoryName) - 1);
-      }
-
-      function fillInOrderFinalCategories(finalCategory, subCategoriesResults) {
-        // console.log(`Fill final category ${finalCategory.name} with semi results in order last from A->B->C`);
-
+      function moveToFinalCategories(finalCategory) {
+        console.log(`Move to final category :: ${finalCategory.name} with max. count ${finalCategory.countFromConfiguration}`);
+        let i = 0;
         let index = 0;
         let order = 0;
-        let allFilled = false;
-        let countSubCategories = subCategoriesResults.length;
-
-        while (allFilled == false) {
-          allFilled = true;
-          for (let i = 0; i < subCategoriesResults.length; i++) {
-            if (index < subCategoriesResults[i].length) {
-              let personStart = new PersonStart(order++, subCategoriesResults[i][index]);
+        let allUsed = false;
+        while (i < parseInt(finalCategory.countFromConfiguration) && !allUsed) {
+          allUsed = true;
+          for (const semiCategoryName of finalCategory.semiCategories.toReversed()) {
+            let runner = classResults.get(semiCategoryName).personResults[0];
+            if (runner != null) {
+              console.log(`Runner ${runner.fullName} moved from semifinal ${semiCategoryName} to final ${finalCategory.name}`);
+              let personStart = new PersonStart(order++, runner);
               finalCategory.personStarts.push(personStart);
-              allFilled = false;
+              //delete from classResults
+              classResults.get(semiCategoryName).personResults.splice(0, 1);
+              allUsed = false;
+              i++;
             }
           }
           index++;
         }
+      }
 
-        console.log(`Filled final category ${finalCategory.name} with ${finalCategory.personStarts.length} runners`)
-
-        //reverse order for move worst to begin and best to end
-        finalCategory.personStarts.reverse();
+      function splitDISQToFinalCategories() {
+        console.log(`Add DISQ into startlist`);
+        for (let [category, personArr] of disq) {
+          console.log(`Category ${category} has ${personArr.length} DQ`);
+          category = addSuffixToFinalCategory(category, 0);
+          for (const finalCategoryName of classResults.get(category).finalCategories.keys()) {
+            if (classStarts.get(finalCategoryName).personStarts.length + personArr.length <= classStarts.get(finalCategoryName).countFromConfiguration) {
+              console.log(`Possible to add all DQ to ${finalCategoryName}`);
+              for (const person of personArr) {
+                let personStart = new PersonStart(0, person);
+                classStarts.get(finalCategoryName).personStarts.push(personStart);
+                console.log(`${person.fullName} added to beginning of ${finalCategoryName}`);
+              }
+              //reorder because of added persons
+              for (let i = 0; i < classStarts.get(finalCategoryName).personStarts.length; i++) {
+                // classStarts.get(finalCategoryName).personStarts[i].order = i+1;
+              }
+              break;
+            }
+          }
+        }          
       }
 
       function showStartList(elementId) {
@@ -369,8 +391,8 @@
         }
         el.innerHTML += `Total OK : ${total}\r\n`;
         el.innerHTML += `+ DNS    : ${dns}\r\n`;
-        el.innerHTML += `+ NotOK  : ${disq.length}\r\n`;
-        el.innerHTML += `Total    : ${total + dns + disq.length}\r\n`;
+        el.innerHTML += `+ NotOK  : ${disqCount}\r\n`;
+        el.innerHTML += `Total    : ${total + dns + disqCount}\r\n`;
       }
 
       function saveDataToFile(fileName) {
@@ -425,14 +447,20 @@
 
     <div class="input-group" style="height: 250px">
         <span class="input-group-text">Configuration</span>
-        <textarea class="form-control" aria-label="Configuration" id="configurationTextArea">D16;D16A,D16B,D16C;18;30;900
-D18;D18A,D18B,D18C;18;30;900
-D20;D20A,D20B;18;30;800
-D21;D21A,D21B,D21C,D21D;32;40;40;800
-H16;H16A,H16B,H16C;18;30;900
-H18;H18A,H18B,H18C;18;30;900
+        <textarea class="form-control" aria-label="Configuration" id="configurationTextArea">
 H20;H20A,H20B;18;30;800
 H21;H21A,H21B,H21C,H21D;32;40;40;800</textarea>
+
+<!-- <textarea class="form-control" aria-label="Configuration" id="configurationTextArea">
+  D16;D16A,D16B,D16C;18;30;900
+  D18;D18A,D18B,D18C;18;30;900
+  D20;D20A,D20B;18;30;800
+  D21;D21A,D21B,D21C,D21D;32;40;40;800
+  H16;H16A,H16B,H16C;18;30;900
+  H18;H18A,H18B,H18C;18;30;900
+  H20;H20A,H20B;18;30;800
+  H21;H21A,H21B,H21C,H21D;32;40;40;800</textarea> -->
+
     </div>
 
     <label aria-label="removeDNS">Remove DidNotStart</label>
