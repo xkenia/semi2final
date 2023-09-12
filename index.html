@@ -43,7 +43,7 @@
         }
       }
 
-      function PersonResult(familyName, givenName, time, status, reg, si) {
+      function PersonResult(familyName, givenName, time, status, reg, si, semifinalCategory) {
         this.givenName = givenName;
         this.familyName = familyName;
         this.fullName = familyName + " " + givenName;
@@ -51,7 +51,7 @@
         this.status = status;
         this.reg = reg;
         this.si = si;
-        this.finalCategory = "";
+        this.semifinalCategory = semifinalCategory;
       }
 
       function PersonStart(order, personResult) {
@@ -138,7 +138,15 @@
         reader.onload = function(e) {
           var contents = e.target.result;
           parse(contents); 
-          main(); //start here
+
+          /**
+           * Start is here - start
+          */
+              main();
+          /**
+           * Start is here - end
+          */
+          
         };
         reader.readAsText(file);
         e.target.value=""; //to be possible to fire onChange event with same file
@@ -181,8 +189,7 @@
               }
               let siNode = personResultsNode[j].getElementsByTagName("Result")[0].getElementsByTagName("ControlCard");
               let si = siNode > 0 ? siNode[0].textContent : "0";
-              const person = new PersonResult(familyName, givenName, time, status, reg, si);
-              // console.debug(person);
+              const person = new PersonResult(familyName, givenName, time, status, reg, si, className);
 
               //remove DNS if Remove DNS checked
               if (person.status == 'DidNotStart' && document.getElementById('removeDNS').checked == true) {
@@ -206,10 +213,8 @@
       function main() {
         const originalResultsClass = classResults; //save original results
 
-        console.log("Class Starts entries::");
+        console.log("Class Starts ::");
         console.log([...classStarts.entries()]);
-        console.log("Class Results entries::");
-        console.log([...classResults.entries()]);
 
         parseConfiguration();
 
@@ -221,7 +226,9 @@
 
         splitDISQToFinalCategories();
 
-        // showStartList('file-content');
+        console.log("Class Results ::");
+        console.log([...classResults.entries()]);
+
         showFinalCategoriesSummary('file-content');
 
         //enable show buttons
@@ -236,9 +243,10 @@
       */
 
       function checkFinalCategories() {
+        console.warn(`Check final categories.`);
         classStarts.forEach((finalCategory, finalCategoryName, map) => {
           let lowerCategory = existNonEmptyLowerFinalCategory(finalCategory.name);
-          if (finalCategory.personStarts.length != 0 && finalCategory.countFromConfiguration != finalCategory.personStarts.length && lowerCategory) {
+          if (finalCategory.personStarts.length != 0 && finalCategory.countFromConfiguration > finalCategory.personStarts.length && lowerCategory) {
             console.error(`${finalCategoryName} is not fully filled : config = ${finalCategory.countFromConfiguration} || length = ${finalCategory.personStarts.length} || ${lowerCategory.name} with count ${lowerCategory.personStarts.length}`);
             let placesToFill = finalCategory.countFromConfiguration - finalCategory.personStarts.length;
             if (lowerCategory.personStarts.length < placesToFill) {
@@ -315,6 +323,8 @@
         let index = 0;
         let order = 0;
         let allUsed = false;
+
+        //move OK runners to proper final category
         while (i < parseInt(finalCategory.countFromConfiguration) && !allUsed) {
           allUsed = true;
           for (const semiCategoryName of finalCategory.semiCategories.toReversed()) {
@@ -331,10 +341,35 @@
           }
           index++;
         }
+
+        //check if no other person has same time and should be moved to higher category
+        for (const semiCategoryName of finalCategory.semiCategories) {
+          let runner = classResults.get(semiCategoryName).personResults[0];
+          //no more runners left
+          if (runner == null) {
+            break;
+          }
+          for (let lastIndex = classStarts.get(finalCategory.name).personStarts.length - 1; lastIndex > 0; lastIndex--) {
+            const lastRunner = classStarts.get(finalCategory.name).personStarts[lastIndex];
+            if (lastRunner.personResult.semifinalCategory == semiCategoryName) {
+              if (runner.time == lastRunner.personResult.time) {
+                console.warn(`In category ${semiCategoryName} has ${runner.fullName} and ${lastRunner.personResult.fullName} same time.`);
+                console.log(`Runner ${runner.fullName} moved from semifinal ${semiCategoryName} to final ${finalCategory.name}`);
+                finalCategory.personStarts.push(lastRunner);
+                //delete from classResults
+                classResults.get(semiCategoryName).personResults.splice(0, 1);
+                let lowerCategoryName = getNextLowerCategory(finalCategory.name);
+                let lowerCategory = classStarts.get(lowerCategoryName).countFromConfiguration--;
+              } else {
+                break;
+              }
+            }
+          }
+        }
       }
 
       function splitDISQToFinalCategories() {
-        console.log(`Add DISQ into startlist`);
+        console.warn(`Add DISQ into startlist`);
         for (let [category, personArr] of disq) {
           console.log(`Category ${category} has ${personArr.length} DQ`);
           category = addSuffixToFinalCategory(category, 0);
@@ -345,10 +380,6 @@
                 let personStart = new PersonStart(0, person);
                 classStarts.get(finalCategoryName).personStarts.push(personStart);
                 console.log(`${person.fullName} added to beginning of ${finalCategoryName}`);
-              }
-              //reorder because of added persons
-              for (let i = 0; i < classStarts.get(finalCategoryName).personStarts.length; i++) {
-                // classStarts.get(finalCategoryName).personStarts[i].order = i+1;
               }
               break;
             }
