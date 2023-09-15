@@ -137,7 +137,10 @@
         var reader = new FileReader();
         reader.onload = function(e) {
           var contents = e.target.result;
+          console.warn(`Parse file ${resultsFileName}.`);
           parse(contents); 
+
+          console.warn(`Result file parsing finished.`);
 
           /**
            * Start is here - start
@@ -170,7 +173,8 @@
           let className = classResultsNode[i].getElementsByTagName("Class")[0].getElementsByTagName("Name")[0].textContent;
           let personResultsNode = classResultsNode[i].getElementsByTagName("PersonResult");
           let personResults = [];
-          let disqArr = [];
+          let shortClassName = removeSuffixFromFinalCategory(className);
+          let disqArr = disq.has(shortClassName) ? disq.get(shortClassName) : [];
           for (j = 0; j < personResultsNode.length; j++) {
               let familyName = personResultsNode[j].getElementsByTagName("Person")[0].getElementsByTagName("Name")[0].getElementsByTagName("Family")[0].textContent;
               let givenName = personResultsNode[j].getElementsByTagName("Person")[0].getElementsByTagName("Name")[0].getElementsByTagName("Given")[0].textContent;
@@ -184,6 +188,9 @@
               for (let k = 0; k < regNode.length && regNode[k].attributes.length != 0; k++) {
                 if (regNode[k].attributes["type"].value == "CZE") {
                   reg = regNode[k].textContent;
+                  if (reg.length < 7) {
+                    console.error(`Runner ${familyName} ${givenName} has wrong registration number ${reg}!`);
+                  }
                   break;
                 }
               }
@@ -204,7 +211,7 @@
               }
           }
           if (disqArr.length != 0) {
-            disq.set(removeSuffixFromFinalCategory(className), disqArr);
+            disq.set(shortClassName, disqArr);
           }
           classResults.set(className, new ClassResult(className, personResults, 0));
         } 
@@ -215,7 +222,9 @@
 
         console.log("Class Starts ::");
         console.log([...classStarts.entries()]);
-
+        console.log("Class Disq ::");
+        console.log([...disq.entries()]);
+        
         parseConfiguration();
 
         classStarts.forEach(category => {
@@ -225,6 +234,8 @@
         checkFinalCategories();
 
         splitDISQToFinalCategories();
+
+        console.warn(`Finished processing file.`);
 
         console.log("Class Results ::");
         console.log([...classResults.entries()]);
@@ -267,6 +278,7 @@
       }
 
       function parseConfiguration() {
+        console.warn(`Parse configuration.`);
         let configurationTextArea = document.getElementById("configurationTextArea").value;
         let rows = configurationTextArea.match(/[^\r\n]+/g);
         for (let i = 0; i < rows.length; i++) {
@@ -318,7 +330,7 @@
       }
 
       function moveToFinalCategories(finalCategory) {
-        console.log(`Move to final category :: ${finalCategory.name} with max. count ${finalCategory.countFromConfiguration}`);
+        console.warn(`Move to final category :: ${finalCategory.name} with max. count ${finalCategory.countFromConfiguration}`);
         let i = 0;
         let index = 0;
         let order = 0;
@@ -353,7 +365,7 @@
             const lastRunner = classStarts.get(finalCategory.name).personStarts[lastIndex];
             if (lastRunner.personResult.semifinalCategory == semiCategoryName) {
               if (runner.time == lastRunner.personResult.time) {
-                console.warn(`In category ${semiCategoryName} has ${runner.fullName} and ${lastRunner.personResult.fullName} same time.`);
+                console.error(`In category ${semiCategoryName} has ${runner.fullName} and ${lastRunner.personResult.fullName} same time.`);
                 console.log(`Runner ${runner.fullName} moved from semifinal ${semiCategoryName} to final ${finalCategory.name}`);
                 finalCategory.personStarts.push(lastRunner);
                 //delete from classResults
@@ -369,7 +381,7 @@
       }
 
       function splitDISQToFinalCategories() {
-        console.warn(`Add DISQ into startlist`);
+        console.warn(`Add DISQ into startlist.`);
         for (let [category, personArr] of disq) {
           console.log(`Category ${category} has ${personArr.length} DQ`);
           category = addSuffixToFinalCategory(category, 0);
@@ -464,9 +476,10 @@
       Exceptions:
         - do not use Firefox (not implemented some functions)
         - open dev console for more info in case of problem
+        - semi and final categories must use one letter [A..Z] suffix 
     
       Not function:
-        - disqualifications, mispunched, not started
+        - ???
     </pre>
 
     <h4>Test data</h4>
@@ -490,7 +503,8 @@ H21;H21A,H21B,H21C,H21D;32;40;40;800</textarea>
   H16;H16A,H16B,H16C;18;30;900
   H18;H18A,H18B,H18C;18;30;900
   H20;H20A,H20B;18;30;800
-  H21;H21A,H21B,H21C,H21D;32;40;40;800</textarea> -->
+  H21;H21A,H21B,H21C,H21D;32;40;40;800
+</textarea> -->
 
     </div>
 
