@@ -220,8 +220,8 @@
       function main() {
         const originalResultsClass = classResults; //save original results
 
-        console.log("Class Results ::");
-        console.log([...classResults.entries()]);
+        console.log("Class Starts ::");
+        console.log([...classStarts.entries()]);
         console.log("Class Disq ::");
         console.log([...disq.entries()]);
         
@@ -237,8 +237,8 @@
 
         console.warn(`Finished processing file.`);
 
-        console.log("Class Starts ::");
-        console.log([...classStarts.entries()]);
+        console.log("Class Results ::");
+        console.log([...classResults.entries()]);
 
         showFinalCategoriesSummary('file-content');
 
@@ -330,8 +330,7 @@
       }
 
       function moveToFinalCategories(finalCategory) {
-        let lastSemiCategoryName = finalCategory.semiCategories[finalCategory.semiCategories.length - 1];
-        console.warn(`Move to final category :: ${finalCategory.name} with max. count ${finalCategory.countFromConfiguration}; started with ${lastSemiCategoryName}`);
+        console.warn(`Move to final category :: ${finalCategory.name} with max. count ${finalCategory.countFromConfiguration}`);
         let i = 0;
         let index = 0;
         let order = 0;
@@ -341,23 +340,11 @@
         while (i < parseInt(finalCategory.countFromConfiguration) && !allUsed) {
           allUsed = true;
           for (const semiCategoryName of finalCategory.semiCategories.toReversed()) {
-            if (semiCategoryName != lastSemiCategoryName) {
-              console.error(`semicategory != lastsemicategoryname: ${semiCategoryName} != ${lastSemiCategoryName}`);
-              continue;
-            }
             let runner = classResults.get(semiCategoryName).personResults[0];
             if (runner != null) {
               console.log(`Runner ${runner.fullName} moved from semifinal ${semiCategoryName} to final ${finalCategory.name}`);
               let personStart = new PersonStart(order++, runner);
               finalCategory.personStarts.push(personStart);
-              //set next semiFinalSubCategory to use
-              let semiCategoryNameCode = semiCategoryName.substring(semiCategoryName.length-1).charCodeAt(0) - 1;
-              if (semiCategoryNameCode < 65) {
-                lastSemiCategoryName = finalCategory.semiCategories[finalCategory.semiCategories.length - 1];
-              } else {
-                lastSemiCategoryName = getNextCategory(semiCategoryName, 'up');
-              }
-              // console.error(`Last semi category name = ${lastSemiCategoryName} !!!`);
               //delete from classResults
               classResults.get(semiCategoryName).personResults.splice(0, 1);
               allUsed = false;
@@ -381,14 +368,6 @@
                 console.error(`In category ${semiCategoryName} has ${runner.fullName} and ${lastRunner.personResult.fullName} same time.`);
                 console.log(`Runner ${runner.fullName} moved from semifinal ${semiCategoryName} to final ${finalCategory.name}`);
                 finalCategory.personStarts.push(new PersonStart(0, runner));
-                //set next semiFinalSubCategory to use
-                let semiCategoryNameCode = semiCategoryName.substring(semiCategoryName.length-1).charCodeAt(0);
-                if (semiCategoryNameCode < 65) {
-                  lastSemiCategoryName = finalCategory.semiCategories[finalCategory.semiCategories.length() - 1];
-                } else {
-                  lastSemiCategoryName = getNextCategory(semiCategoryName);
-                }
-                console.error(`Last semi category name = ${lastSemiCategoryName} !!!`);
                 //delete from classResults
                 classResults.get(semiCategoryName).personResults.splice(0, 1);
                 let lowerCategoryName = getNextLowerCategory(finalCategory.name);
@@ -484,15 +463,17 @@
 
     <h1>Prepare results from semifinal to final startlist</h1>
 
-    <h3>Usage</h3>
-    <pre>
-        1. fill configuration
+    <h3>Usage (most is QE specific)</h3>
+    <pre>        1. fill configuration
           [final category name];[semifinal categories split by ,];[runners count in final A category];[runners count in final B category] ...
         2. select xml file with semifinal results in format IOF XML v3
-        3. save content "Show QE CSV import" as txt file and import into final race in QE - this will import runners in proper categories; import is in Soubor -> Importovat -> Textovy soubor -> Seznam zavodniku ve formatu csv
-        4. save content "Show OB2000 start times" as txt file and import into final race in QE - this will update start times as an order from 1; import is in Useky/Etapy -> Importovat -> Startovni casy -> OB2000
-        5. in QE update start times with real start times - first start in category, start interval
-        6. check with advisor if start list is correct
+        3. save content "Show QE CSV import" as txt file
+        4. import into final race in QE - this will import runners in proper categories; import is in Soubor -&gt; Importovat -&gt; Textovy soubor -&gt; Seznam zavodniku ve formatu csv
+        5. save content "Show OB2000 start times" as txt file
+        6. import into final race in QE - this will update start times as an order from 1; import is in Useky/Etapy -&gt; Importovat -&gt; Startovni casy -&gt; OB2000
+        7. update start times with real start times - first start in category, start interval
+        8. draw again, but now with USE SAME ORDER!
+        9. check with advisor if start list is correct
     
       Exceptions:
         - do not use Firefox (not implemented some functions)
@@ -504,16 +485,15 @@
     </pre>
 
     <h4>Test data</h4>
-    <a href="https://oris.orientacnisporty.cz/Startovka?id=6233">test startlist</a></br>
-    <a href="https://oris.orientacnisporty.cz/Vysledky?id=6232">test results - select IOF XML v3 format</a> - missing ControlCard as ORIS doesn't store it</br>
-    <a href="https://github.com/Quick-Event/quickbox/issues/806">QE issue with drawing in specified order #806</a></br>
-    <a href="https://github.com/Quick-Event/quickbox/issues/95">QE issue with import start times OB2000 #95</a></br>
-    <hr></br>
+    <a href="https://oris.orientacnisporty.cz/Startovka?id=6233">test startlist</a><br>
+    <a href="https://oris.orientacnisporty.cz/Vysledky?id=6232">test results - select IOF XML v3 format</a> - missing ControlCard as ORIS doesn't store it<br>
+    <a href="https://github.com/Quick-Event/quickbox/issues/806">QE issue with drawing in specified order #806</a><br>
+    <a href="https://github.com/Quick-Event/quickbox/issues/95">QE issue with import start times OB2000 #95</a><br>
+    <hr><br>
 
     <div class="input-group" style="height: 250px">
         <span class="input-group-text">Configuration</span>
-        <textarea class="form-control" aria-label="Configuration" id="configurationTextArea">
-D16;D16A,D16B,D16C;18;30;800
+        <textarea class="form-control" aria-label="Configuration" id="configurationTextArea">D16;D16A,D16B,D16C;18;30;800
 D18;D18A,D18B,D18C;18;30;800
 D20;D20A,D20B;18;30;800
 D21;D21A,D21B,D21C,D21D;32;40;800
@@ -537,22 +517,22 @@ H21;H21A,H21B,H21C,H21D;32;40;40;800
     </div>
 
     <label aria-label="removeDNS">Remove DidNotStart</label>
-    <input type="checkbox" id="removeDNS" checked></input>
-    </br>
-    </br>
-    <input type="file" id="file-input" />
-    </br>
-    </br>
+    <input type="checkbox" id="removeDNS" checked="">
+    <br>
+    <br>
+    <input type="file" id="file-input">
+    <br>
+    <br>
 
     <h3>Start list: </h3>
     <pre id="starttime"></pre>
 
-    <button class="btnShow" id="finalSummary" onclick="showFinalCategoriesSummary('file-content')" disabled>Show summary</button>
-    <button class="btnShow" id="qecsv" onclick="showQECSV('file-content')" disabled>Show QE CSV import</button>
-    <button class="btnShow" id="ob2000start" onclick="showOB2000Start('file-content')" disabled>Show OB2000 start times</button>
-    <button class="btnDownload" id="btnDownload" onclick="saveDataToFile(resultsFileName + '-' + showedDataType + '.txt')" disabled>Download showed data</button>
+    <button class="btnShow" id="finalSummary" onclick="showFinalCategoriesSummary(&#39;file-content&#39;)" disabled="">Show summary</button>
+    <button class="btnShow" id="qecsv" onclick="showQECSV(&#39;file-content&#39;)" disabled="">Show QE CSV import</button>
+    <button class="btnShow" id="ob2000start" onclick="showOB2000Start(&#39;file-content&#39;)" disabled="">Show OB2000 start times</button>
+    <button class="btnDownload" id="btnDownload" onclick="saveDataToFile(resultsFileName + &#39;-&#39; + showedDataType + &#39;.txt&#39;)" disabled="">Download showed data</button>
 
     <pre id="file-content"></pre>
     
-  </body>
-</html>
+  
+</body></html>
