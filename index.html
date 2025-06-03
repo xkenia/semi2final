@@ -195,7 +195,7 @@
                 }
               }
               let siNode = personResultsNode[j].getElementsByTagName("Result")[0].getElementsByTagName("ControlCard");
-              let si = siNode > 0 ? siNode[0].textContent : "0";
+              let si = siNode.length > 0 ? siNode[0].textContent : "0";
               const person = new PersonResult(familyName, givenName, time, status, reg, si, className);
 
               //remove DNS if Remove DNS checked
@@ -220,8 +220,8 @@
       function main() {
         const originalResultsClass = classResults; //save original results
 
-        console.log("Class Starts ::");
-        console.log([...classStarts.entries()]);
+        console.log("Class Results ::");
+        console.log([...classResults.entries()]);
         console.log("Class Disq ::");
         console.log([...disq.entries()]);
         
@@ -237,8 +237,8 @@
 
         console.warn(`Finished processing file.`);
 
-        console.log("Class Results ::");
-        console.log([...classResults.entries()]);
+        console.log("Class Starts ::");
+        console.log([...classStarts.entries()]);
 
         showFinalCategoriesSummary('file-content');
 
@@ -330,7 +330,8 @@
       }
 
       function moveToFinalCategories(finalCategory) {
-        console.warn(`Move to final category :: ${finalCategory.name} with max. count ${finalCategory.countFromConfiguration}`);
+        let lastSemiCategoryName = finalCategory.semiCategories[finalCategory.semiCategories.length - 1];
+        console.warn(`Move to final category :: ${finalCategory.name} with max. count ${finalCategory.countFromConfiguration}; started with ${lastSemiCategoryName}`);
         let i = 0;
         let index = 0;
         let order = 0;
@@ -340,11 +341,23 @@
         while (i < parseInt(finalCategory.countFromConfiguration) && !allUsed) {
           allUsed = true;
           for (const semiCategoryName of finalCategory.semiCategories.toReversed()) {
+            if (semiCategoryName != lastSemiCategoryName) {
+              console.error(`semicategory != lastsemicategoryname: ${semiCategoryName} != ${lastSemiCategoryName}`);
+              continue;
+            }
             let runner = classResults.get(semiCategoryName).personResults[0];
             if (runner != null) {
               console.log(`Runner ${runner.fullName} moved from semifinal ${semiCategoryName} to final ${finalCategory.name}`);
               let personStart = new PersonStart(order++, runner);
               finalCategory.personStarts.push(personStart);
+              //set next semiFinalSubCategory to use
+              let semiCategoryNameCode = semiCategoryName.substring(semiCategoryName.length-1).charCodeAt(0) - 1;
+              if (semiCategoryNameCode < 65) {
+                lastSemiCategoryName = finalCategory.semiCategories[finalCategory.semiCategories.length - 1];
+              } else {
+                lastSemiCategoryName = getNextCategory(semiCategoryName, 'up');
+              }
+              // console.error(`Last semi category name = ${lastSemiCategoryName} !!!`);
               //delete from classResults
               classResults.get(semiCategoryName).personResults.splice(0, 1);
               allUsed = false;
@@ -364,10 +377,18 @@
           for (let lastIndex = classStarts.get(finalCategory.name).personStarts.length - 1; lastIndex > 0; lastIndex--) {
             const lastRunner = classStarts.get(finalCategory.name).personStarts[lastIndex];
             if (lastRunner.personResult.semifinalCategory == semiCategoryName) {
-              if (runner.time == lastRunner.personResult.time) {
+              if (runner.time == lastRunner.personResult.time && runner.reg != lastRunner.personResult.reg) {
                 console.error(`In category ${semiCategoryName} has ${runner.fullName} and ${lastRunner.personResult.fullName} same time.`);
                 console.log(`Runner ${runner.fullName} moved from semifinal ${semiCategoryName} to final ${finalCategory.name}`);
-                finalCategory.personStarts.push(lastRunner);
+                finalCategory.personStarts.push(new PersonStart(0, runner));
+                //set next semiFinalSubCategory to use
+                let semiCategoryNameCode = semiCategoryName.substring(semiCategoryName.length-1).charCodeAt(0);
+                if (semiCategoryNameCode < 65) {
+                  lastSemiCategoryName = finalCategory.semiCategories[finalCategory.semiCategories.length() - 1];
+                } else {
+                  lastSemiCategoryName = getNextCategory(semiCategoryName);
+                }
+                console.error(`Last semi category name = ${lastSemiCategoryName} !!!`);
                 //delete from classResults
                 classResults.get(semiCategoryName).personResults.splice(0, 1);
                 let lowerCategoryName = getNextLowerCategory(finalCategory.name);
@@ -492,8 +513,15 @@
     <div class="input-group" style="height: 250px">
         <span class="input-group-text">Configuration</span>
         <textarea class="form-control" aria-label="Configuration" id="configurationTextArea">
+D16;D16A,D16B,D16C;18;30;800
+D18;D18A,D18B,D18C;18;30;800
+D20;D20A,D20B;18;30;800
+D21;D21A,D21B,D21C,D21D;32;40;800
+H16;H16A,H16B,H16C;18;30;800
+H18;H18A,H18B,H18C;18;30;800
 H20;H20A,H20B;18;30;800
-H21;H21A,H21B,H21C,H21D;32;40;40;800</textarea>
+H21;H21A,H21B,H21C,H21D;32;40;40;800
+</textarea>
 
 <!-- <textarea class="form-control" aria-label="Configuration" id="configurationTextArea">
   D16;D16A,D16B,D16C;18;30;900
