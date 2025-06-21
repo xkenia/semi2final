@@ -407,7 +407,7 @@
       }
 
       function showQECSV(elementId) {
-        document.getElementById(elementId).innerHTML = "";
+        document.getElementById(elementId).innerHTML = "reg_id,categ,si_number,surname,name,lic,note\r\n";
         for (const [name, cat] of classStarts) {
           document.getElementById(elementId).innerHTML += cat.toRunnersQECSV();
         }
@@ -416,7 +416,7 @@
       }
 
       function showOB2000Start(elementId) {
-        document.getElementById(elementId).innerHTML = "";
+        document.getElementById(elementId).innerHTML = "    start                si full name            cat  reg num\r\n";
         for (const [name, cat] of classStarts) {
           document.getElementById(elementId).innerHTML += cat.toStartTimesOB2000();
         }
