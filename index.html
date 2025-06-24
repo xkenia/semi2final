@@ -18,7 +18,8 @@
       var disqCount = 0;
       var resultsFileName; //used for generate filename for import into QE
       var showedDataType;
-      var dns;
+      var dns = 0;
+      var removeDNS;
       
       /** 
        * Classes 
@@ -102,11 +103,12 @@
 
         this.toRunnersQECSV = function() {
           let content = "";
+          let index = this.personStarts.length;
           // reg;kat;si;surname;name;lic;note
           this.personStarts.forEach(element => {
             let result = element.personResult;
             let lic = 'C';
-            let note = '';
+            let note = index--;
             content += `${result.reg},${this.name},${result.si},${result.familyName},${result.givenName},${lic},${note}\r\n`;
           });
           return content;
@@ -156,12 +158,14 @@
       }
 
       function init() {
-        classResults.clear;
-        classStarts.clear
-        disq.clear;
+        classResults.clear();
+        classStarts.clear();
+        disq.clear();
         resultsFileName = ''; //used for generate filename for import into QE
         showedDataType = '';
-        dns = 0;
+        dnsCount = 0;
+        disqCount = 0;
+        removeDNS = document.getElementById('removeDNS').checked == true;
       }
 
       function parse(content) {
@@ -199,13 +203,18 @@
               const person = new PersonResult(familyName, givenName, time, status, reg, si, className);
 
               //remove DNS if Remove DNS checked
-              if (person.status == 'DidNotStart' && document.getElementById('removeDNS').checked == true) {
+              if (person.status == 'DidNotStart' && removeDNS) {
                 console.log(`Runner ${className} ${person.fullName} [${person.reg}] removed from final list - DNS`);
-                dns++;
+                dnsCount++;
               } else if (person.status != 'OK') {
-                console.log(`Runner ${className} ${person.fullName} [${person.reg}] is not OK - moved to DISQ`);
+                if (person.status == 'DidNotStart') {
+                  console.log(`Runner ${className} ${person.fullName} [${person.reg}] is DNS - moved to DISQ`);
+                  dnsCount++;
+                } else {
+                  console.log(`Runner ${className} ${person.fullName} [${person.reg}] is not OK - moved to DISQ`);
+                  disqCount++;
+                }
                 disqArr.push(person);
-                disqCount++;
               } else {
                 personResults.push(person);
               }
@@ -399,20 +408,14 @@
         }          
       }
 
-      function showStartList(elementId) {
-        document.getElementById(elementId).innerHTML = "";
-        for (const [name, cat] of classStarts) {
-          document.getElementById(elementId).innerHTML += cat.toRunnersQECSV();
-        }
-      }
-
       function showQECSV(elementId) {
         document.getElementById(elementId).innerHTML = "reg_id,categ,si_number,surname,name,lic,note\r\n";
         for (const [name, cat] of classStarts) {
           document.getElementById(elementId).innerHTML += cat.toRunnersQECSV();
         }
-        document.getElementById('btnDownload').disabled = false;
+        
         showedDataType = 'runnerCSV';
+        document.getElementById('btnDownload').disabled = false;
       }
 
       function showOB2000Start(elementId) {
@@ -420,8 +423,9 @@
         for (const [name, cat] of classStarts) {
           document.getElementById(elementId).innerHTML += cat.toStartTimesOB2000();
         }
-        document.getElementById('btnDownload').disabled = false;
+
         showedDataType = 'OB2000start';
+        document.getElementById('btnDownload').disabled = false;
       }
 
       function showFinalCategoriesSummary(elementId) {
@@ -432,10 +436,19 @@
           el.innerHTML += `${name} : ${cat.personStarts.length}\r\n`;
           total += cat.personStarts.length;
         }
-        el.innerHTML += `Total OK : ${total}\r\n`;
-        el.innerHTML += `+ DNS    : ${dns}\r\n`;
-        el.innerHTML += `+ NotOK  : ${disqCount}\r\n`;
-        el.innerHTML += `Total    : ${total + dns + disqCount}\r\n`;
+        let totalOK = total - disqCount;
+        let stringDNS = "";
+        if (!removeDNS) {
+          stringDNS = `# DNS    : ${dnsCount}\r\n`;
+          totalOK = totalOK - dnsCount;
+        }
+        el.innerHTML += `Total OK : ${totalOK}\r\n`;
+        el.innerHTML += stringDNS;
+        el.innerHTML += `# NotOK  : ${disqCount}\r\n`;
+        el.innerHTML += `Total    : ${total}\r\n`;
+
+        showedDataType = 'summary';
+        document.getElementById('btnDownload').disabled = false;
       }
 
       function saveDataToFile(fileName) {
@@ -462,6 +475,7 @@
     </script>
 
     <h1>Prepare results from semifinal to final startlist</h1>
+    <p>version: 1.3</p>
 
     <h3>Usage (most is QE specific)</h3>
     <pre>        1. fill configuration
@@ -479,9 +493,16 @@
         - do not use Firefox (not implemented some functions)
         - open dev console for more info in case of problem
         - semi and final categories must use one letter [A..Z] suffix 
-    
-      Not function:
-        - ???
+
+      Fixed:
+        - add to export runners:
+          - SI control cards
+          - order in category into note
+          - header row
+        - add to export start times:
+          - header row
+        - fixed count in Summary
+        - possible to run without Refresh
     </pre>
 
     <h4>Test data</h4>
